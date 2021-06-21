@@ -294,7 +294,7 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
-
+  np->mask=p->mask;
   release(&np->lock);
 
   return pid;
@@ -692,4 +692,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int procnum(){
+  int n=0;
+  int i;
+  for(i=0;i<NPROC;i++){
+    if(proc[i].state!=UNUSED){
+      n++;
+    }
+  }
+  return n;
 }
