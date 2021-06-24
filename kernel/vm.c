@@ -5,7 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
-
+#include "spinlock.h"
+#include "proc.h"
 /*
  * the kernel's page table.
  */
@@ -18,6 +19,12 @@ extern char trampoline[]; // trampoline.S
 /*
  * create a direct-map page table for the kernel.
  */
+
+void _rvmprint(pagetable_t pagetable,int level);
+
+void uvmmap(pagetable_t proc_pagetable,uint64 va,uint64 pa,uint64 sz,int perm);
+
+
 void
 kvminit()
 {
@@ -132,7 +139,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(myproc()->prockernelpagetable, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -379,7 +386,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
-  uint64 n, va0, pa0;
+  /*uint64 n, va0, pa0;
 
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
@@ -395,7 +402,10 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     dst += n;
     srcva = va0 + PGSIZE;
   }
-  return 0;
+  return 0;*/
+  return copyin_new(pagetable, dst,  srcva,  len);
+  
+
 }
 
 // Copy a null-terminated string from user to kernel.
@@ -405,7 +415,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
-  uint64 n, va0, pa0;
+  /*uint64 n, va0, pa0;
   int got_null = 0;
 
   while(got_null == 0 && max > 0){
@@ -438,5 +448,79 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return 0;
   } else {
     return -1;
+  } */
+  
+ return copyinstr_new(pagetable, dst, srcva, max);
+
+
+}
+
+void vmprint(pagetable_t pagetable){
+  printf("page table %p\n",pagetable);
+  int level=0;
+  _rvmprint((pagetable_t)pagetable,level);
+}
+
+void _rvmprint(pagetable_t pagetable,int level){
+  for(int i=0;i<512;i++){
+    pte_t pte=pagetable[i];
+    if(pte&PTE_V){
+      if(level==0){
+        printf("..%d: pte %p pa %p\n",i,pte,PTE2PA(pte));
+        _rvmprint((pagetable_t)PTE2PA(pte),level+1);
+      }else if(level==1){
+        printf(".. ..%d: pte %p pa %p\n",i,pte,PTE2PA(pte));
+        _rvmprint((pagetable_t)PTE2PA(pte),level+1);
+      }else{
+         printf(".. .. ..%d: pte %p pa %p\n",i,pte,PTE2PA(pte));
+      }
+    }
+  }
+}
+
+pagetable_t prockernelinit(void){
+  pagetable_t prockerneltable=uvmcreate();
+  if (prockerneltable == 0) return 0;
+  uvmmap(prockerneltable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  uvmmap(prockerneltable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  uvmmap(prockerneltable, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  uvmmap(prockerneltable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+  uvmmap(prockerneltable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  uvmmap(prockerneltable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  uvmmap(prockerneltable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  return prockerneltable;
+}
+
+void 
+uvmmap(pagetable_t pagetable, uint64 va, uint64 pa, uint64 sz, int perm)
+{
+  if(mappages(pagetable, va, sz, pa, perm) != 0)
+    panic("kvmmap");
+}
+
+
+
+
+void procuser2kernel(pagetable_t pagetable,pagetable_t prockernelpagetable,uint64 start,uint64 end){
+  pte_t* puser;
+  pte_t* prockernel;
+  uint64 pa;
+  uint64 i;
+  uint flags;
+  if(end<start){
+    return;
+  }
+  start = PGROUNDUP(start);
+  for(i=start;i<end;i+=PGSIZE){
+    if((puser=walk(pagetable,i,0))==0){
+      panic("user table PTE not exists");
+    }
+    if((prockernel=walk(prockernelpagetable,i,1))==0){
+      panic("prockerneltable wrong");
+    }
+    pa=PTE2PA(*puser);
+    flags = (PTE_FLAGS(*puser) & (~PTE_U));
+    *prockernel=PA2PTE(pa)|flags;
+
   }
 }

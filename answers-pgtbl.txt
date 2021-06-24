@@ -1,0 +1,5 @@
+Xv6 has a single kernel page table that's used whenever it executes in the kernel.
+ The kernel page table is a direct mapping to physical addresses, so that kernel virtual address x maps to physical address x.
+  Xv6 also has a separate page table for each process's user address space, containing only mappings for that process's
+   user memory, starting at virtual address zero. Because the kernel page table doesn't contain these mappings, 
+   user addresses are not valid in the kernel. Thus, when the kernel needs to use a user pointer passed in a system call (e.g., the buffer pointer passed to write()), the kernel must first translate the pointer to a physical address. The goal of this section and the next is to allow the kernel to directly dereference user pointers.

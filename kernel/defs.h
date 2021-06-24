@@ -167,6 +167,10 @@ pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
+pte_t *         walk(pagetable_t pagetable, uint64 va, int alloc);
+void            uvmmap(pagetable_t proc_pagetable,uint64 va,uint64 pa,uint64 sz,int perm);
+pagetable_t     prockernelinit(void);
+
 #ifdef SOL_COW
 #else
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
@@ -178,6 +182,10 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+void            vmprint(pagetable_t pagetable);
+pagetable_t     prockernelinit(void);
+void            uvmmap(pagetable_t proc_pagetable,uint64 va,uint64 pa,uint64 sz,int perm);
+void procuser2kernel(pagetable_t pagetable,pagetable_t prockernelpagetable,uint64 start,uint64 end);
 
 // plic.c
 void            plicinit(void);
@@ -201,6 +209,10 @@ void            statsinc(void);
 
 // sprintf.c
 int             snprintf(char*, int, char*, ...);
+
+// vmcopyin
+int copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
+int copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
 
 #ifdef LAB_NET
 // pci.c
